@@ -34,9 +34,6 @@ Session.vim
 \#*\#
 .\#*
 
-# HYPE runtime data (log & history)
-.hype/
-
 # Logs & backups
 *.log
 *.bak
