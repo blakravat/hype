@@ -448,6 +448,7 @@ dependencies = [
  "indicatif",
  "pnet",
  "predicates",
+ "rand",
  "reqwest",
  "surge-ping",
  "thiserror",
