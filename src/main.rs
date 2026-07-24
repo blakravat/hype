@@ -5,6 +5,7 @@ pub mod utils;
 use std::net::Ipv4Addr;
 use tokio::io::{self, AsyncWriteExt};
 use futures::stream::{self, StreamExt};
+use surge_ping::{Client, Config as PingConfig};
 
 use config::CONCURRENCY;
 use utils::input;
@@ -23,10 +24,23 @@ async fn main() {
     };
 
 
+    // One shared ICMP client/socket for every host; cloning it is cheap.
+    let icmp_client = match Client::new(&PingConfig::default()) {
+        Ok(client) => client,
+        Err(err) => {
+            eprintln!("failed to open icmp socket: {err}");
+            return;
+        }
+    };
+
+
     // Stream targets through staged multi-protocol probing with bounded concurrency.
     let mut stdout = io::stdout();
     let mut results = stream::iter(targets)
-        .map(probe_stub)
+        .map(|ip| {
+            let client = icmp_client.clone();
+            probe_stub(client, ip)
+        })
         .buffer_unordered(CONCURRENCY);
 
     // Only alive hosts are printed; dead hosts resolve to `None` and are skipped.
@@ -38,9 +52,12 @@ async fn main() {
 }
 
 
-/// Placeholder for staged multi-protocol probing (ICMP -> TCP -> UDP -> HTTP).
-/// Each stage will short-circuit with `Some(ip)` as soon as the host is found
-/// alive; `None` means every stage reported the host dead.
-async fn probe_stub(ip: Ipv4Addr) -> Option<Ipv4Addr> {
-    Some(ip)
+/// Run each stage in order and short-circuit as soon as one reports alive.
+/// Only the ICMP stage exists so far; later stages plug in the same way.
+async fn probe_stub(client: Client, ip: Ipv4Addr) -> Option<Ipv4Addr> {
+    if probes::icmp_8::check(&client, ip).await {
+        return Some(ip);
+    }
+
+    None
 }
