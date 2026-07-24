@@ -3,12 +3,12 @@ pub mod probes;
 pub mod utils;
 
 use std::net::Ipv4Addr;
-use tokio::io::{self, AsyncWriteExt};
 use futures::stream::{self, StreamExt};
 use surge_ping::{Client, Config as PingConfig};
 
 use config::CONCURRENCY;
 use utils::input;
+use utils::progress::Progress;
 
 
 #[tokio::main]
@@ -34,8 +34,11 @@ async fn main() {
     };
 
 
+    // Single global progress bar for the whole run (drawn on stderr).
+    let progress = Progress::new(targets.len() as u64);
+
+
     // Stream targets through staged multi-protocol probing with bounded concurrency.
-    let mut stdout = io::stdout();
     let mut results = stream::iter(targets)
         .map(|ip| {
             let client = icmp_client.clone();
@@ -45,10 +48,16 @@ async fn main() {
 
     // Only alive hosts are printed; dead hosts resolve to `None` and are skipped.
     while let Some(maybe_alive) = results.next().await {
+        progress.inc();
+
         if let Some(ip) = maybe_alive {
-            let _ = stdout.write_all(format!("{ip}\n").as_bytes()).await;
+            // Hide the bar while printing so the alive-host line lands
+            // cleanly above it instead of tearing the bar mid-redraw.
+            progress.suspend(|| println!("{ip}"));
         }
     }
+
+    progress.finish();
 }
 
 
