@@ -2,11 +2,15 @@ pub mod config;
 pub mod probes;
 pub mod utils;
 
-use std::net::Ipv4Addr;
+use std::{net::Ipv4Addr, time::Duration};
 use futures::stream::{self, StreamExt};
-use surge_ping::{Client, Config as PingConfig};
+use reqwest::{Client as HttpClient, redirect::Policy};
+use surge_ping::{Client as IcmpClient, Config as PingConfig};
 
 use config::CONCURRENCY;
+use config::HTTP_TIMEOUT_MS;
+use config::HTTP_USER_AGENT;
+
 use utils::input;
 use utils::progress::Progress;
 
@@ -30,10 +34,25 @@ async fn main() {
 
 
     // One shared ICMP client/socket for every host; cloning it is cheap.
-    let icmp_client = match Client::new(&PingConfig::default()) {
+    let icmp_client = match IcmpClient::new(&PingConfig::default()) {
         Ok(client) => client,
         Err(err) => {
             eprintln!("failed to open icmp socket: {err}");
+            return;
+        }
+    };
+
+    // One shared HTTP client for every host; connection pooling included.
+    let http_client = match HttpClient::builder()
+        .user_agent(HTTP_USER_AGENT)
+        .timeout(Duration::from_millis(HTTP_TIMEOUT_MS))
+        .redirect(Policy::none())
+        .tls_danger_accept_invalid_certs(true)
+        .build()
+    {
+        Ok(client) => client,
+        Err(err) => {
+            eprintln!("failed to build http client: {err}");
             return;
         }
     };
@@ -46,8 +65,10 @@ async fn main() {
     // Stream targets through staged multi-protocol probing with bounded concurrency.
     let mut results = stream::iter(targets)
         .map(|ip| {
-            let client = icmp_client.clone();
-            probe_stub(client, ip)
+            let icmp_client = icmp_client.clone();
+            let http_client = http_client.clone();
+
+            probe_stub(icmp_client, http_client, ip)
         })
         .buffer_unordered(CONCURRENCY);
 
@@ -67,9 +88,13 @@ async fn main() {
 
 
 /// Run each stage in order and short-circuit as soon as one reports alive.
-/// Only the ICMP stage exists so far; later stages plug in the same way.
-async fn probe_stub(client: Client, ip: Ipv4Addr) -> Option<Ipv4Addr> {
-    if probes::icmp_8::check(&client, ip).await {
+/// ICMP runs first; HTTP is the next stage, plugged in the same way.
+async fn probe_stub(icmp_client: IcmpClient, http_client: HttpClient, ip: Ipv4Addr) -> Option<Ipv4Addr> {
+    if probes::icmp_8::check(&icmp_client, ip).await {
+        return Some(ip);
+    }
+
+    if probes::http::check(&http_client, ip).await {
         return Some(ip);
     }
 
