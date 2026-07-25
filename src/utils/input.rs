@@ -1,10 +1,17 @@
 use std::collections::HashSet;
+use std::io::IsTerminal;
 use std::net::Ipv4Addr;
 use tokio::io::{self, AsyncBufReadExt, BufReader};
 
 /// Read, validate, and clean stdin into a deduplicated list of IPv4 targets.
 /// Returns `None` if stdin is empty or contains only whitespace.
 pub async fn read_targets() -> Option<Vec<Ipv4Addr>> {
+    
+    // Running "./hype" directly with no pipe attaches stdin to a terminal;
+    // reading would just block waiting for interactive keystrokes.
+    if std::io::stdin().is_terminal() {
+        return None;
+    }
 
     // Read every line from stdin into memory before validating the stream.
     let raw_lines = read_raw_lines().await;

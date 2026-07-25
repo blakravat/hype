@@ -18,7 +18,12 @@ async fn main() {
     let targets = match input::read_targets().await {
         Some(targets) => targets,
         None => {
-            println!("Usage: <target> | hype");
+            println!(
+                "Usage:\n\
+                 - <command> | hype >> output.txt\n\
+                 - hype < input.txt >> output.txt\n\
+                 - etc."
+            );
             return;
         }
     };
