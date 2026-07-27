@@ -42,6 +42,15 @@ async fn main() {
         }
     };
 
+    // One shared TCP SYN raw socket + background receiver thread.
+    let tcp_client = match probes::tcp_syn::Client::new() {
+        Ok(client) => client,
+        Err(err) => {
+            eprintln!("failed to open tcp syn socket: {err}");
+            return;
+        }
+    };
+
     // One shared HTTP client for every host; connection pooling included.
     let http_client = match HttpClient::builder()
         .user_agent(HTTP_USER_AGENT)
@@ -66,9 +75,10 @@ async fn main() {
     let mut results = stream::iter(targets)
         .map(|ip| {
             let icmp_client = icmp_client.clone();
+            let tcp_client = tcp_client.clone();
             let http_client = http_client.clone();
 
-            probe_stub(icmp_client, http_client, ip)
+            probe_stub(icmp_client, tcp_client, http_client, ip)
         })
         .buffer_unordered(CONCURRENCY);
 
@@ -89,8 +99,12 @@ async fn main() {
 
 /// Run each stage in order and short-circuit as soon as one reports alive.
 /// ICMP runs first; HTTP is the next stage, plugged in the same way.
-async fn probe_stub(icmp_client: IcmpClient, http_client: HttpClient, ip: Ipv4Addr) -> Option<Ipv4Addr> {
+async fn probe_stub(icmp_client: IcmpClient, tcp_client: probes::tcp_syn::Client, http_client: HttpClient, ip: Ipv4Addr) -> Option<Ipv4Addr> {
     if probes::icmp_8::check(&icmp_client, ip).await {
+        return Some(ip);
+    }
+
+    if probes::tcp_syn::check(&tcp_client, ip).await {
         return Some(ip);
     }
 
