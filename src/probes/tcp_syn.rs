@@ -30,7 +30,6 @@ pub struct Client {
 
 impl Client {
     /// Open the shared raw TCP socket and spawn the receiver thread.
-    /// Call once from main (same pattern as ICMP / HTTP clients).
     pub fn new() -> Result<Self, std::io::Error> {
         let protocol =
             TransportChannelType::Layer4(TransportProtocol::Ipv4(IpNextHeaderProtocols::Tcp));
@@ -138,7 +137,7 @@ fn send_syns(tx: &mut TransportSender, src: Ipv4Addr, dst: Ipv4Addr, sport: u16)
 }
 
 
-/// TCP SYN host discovery on ports 80 & 443 (IPv4 only).
+/// TCP SYN host discovery (IPv4 only).
 /// Uses the shared raw socket; returns true on first SYN-ACK or RST.
 pub async fn check(client: &Client, ip: Ipv4Addr) -> bool {
     let src = match local_ipv4_for(ip) {
