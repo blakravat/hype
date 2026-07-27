@@ -22,7 +22,7 @@ pub async fn check(client: &Client, ip: Ipv4Addr) -> bool {
     let (reply, _rtt) = match pinger.ping(PingSequence(0), &payload).await {
         Ok(reply) => reply,
         Err(err) => {
-            eprintln!("icmp probe error for {ip}: {err}");
+            // eprintln!("icmp probe error for {ip}: {err}");
             return false;
         }
     };

@@ -48,7 +48,7 @@ async fn try_request(client: &Client, url: &str, ip: Ipv4Addr) -> Option<bool> {
     match client.head(url).send().await {
         Ok(response) => Some(is_alive_status(response.status())),
         Err(err) => {
-            eprintln!("http probe error for {ip} ({url}): {err}");
+            // eprintln!("http probe error for {ip} ({url}): {err}");
             None
         }
     }
