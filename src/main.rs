@@ -17,17 +17,30 @@ use utils::progress::Progress;
 
 #[tokio::main]
 async fn main() {
+    // Print command usage and execution requirements.
+    let usage = || {
+        println!(
+            "Usage:\n\
+             - <command> | sudo hype > output.txt\n\
+             - sudo hype < input.txt > output.txt\n\
+             - etc.\n\
+             \n\
+             Note:\n\
+             - This program must be run as root (sudo)."
+        );
+    };
+
+    // Raw sockets require root privileges.
+    if unsafe { libc::geteuid() } != 0 {
+        usage();
+        std::process::exit(1);
+    }
 
     // Read and validate stdin; show usage and exit if nothing was piped in.
     let targets = match input::read_targets().await {
         Some(targets) => targets,
         None => {
-            println!(
-                "Usage:\n\
-                 - <command> | hype >> output.txt\n\
-                 - hype < input.txt >> output.txt\n\
-                 - etc."
-            );
+            usage();
             return;
         }
     };
