@@ -10,6 +10,7 @@ use surge_ping::{Client as IcmpClient, Config as PingConfig};
 use config::CONCURRENCY;
 use config::HTTP_TIMEOUT_MS;
 use config::HTTP_USER_AGENT;
+use config::PRINT_BATCH;
 
 use utils::input;
 use utils::progress::Progress;
@@ -95,15 +96,35 @@ async fn main() {
         })
         .buffer_unordered(CONCURRENCY);
 
+    // Buffer alive hosts to reduce progress bar suspend/redraw frequency.
+    let mut alive_batch = Vec::with_capacity(PRINT_BATCH);
+
     // Only alive hosts are printed; dead hosts resolve to `None` and are skipped.
     while let Some(maybe_alive) = results.next().await {
         progress.inc();
 
         if let Some(ip) = maybe_alive {
-            // Hide the bar while printing so the alive-host line lands
-            // cleanly above it instead of tearing the bar mid-redraw.
-            progress.suspend(|| println!("{ip}"));
+            alive_batch.push(ip);
+
+            if alive_batch.len() >= PRINT_BATCH {
+                // Hide the bar while printing so the alive-host line lands
+                // cleanly above it instead of tearing the bar mid-redraw.
+                progress.suspend(|| {
+                    for ip in alive_batch.drain(..) {
+                        println!("{ip}");
+                    }
+                });
+            }
         }
+    }
+
+    // Flush any remaining alive hosts.
+    if !alive_batch.is_empty() {
+        progress.suspend(|| {
+            for ip in alive_batch.drain(..) {
+                println!("{ip}");
+            }
+        });
     }
 
     progress.finish();
