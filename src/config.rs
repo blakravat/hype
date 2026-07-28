@@ -1,6 +1,9 @@
 /// Maximum number of hosts probed concurrently across all stages.
 pub const CONCURRENCY: usize = 600;
 
+/// Number of alive hosts buffered before printing.
+pub const PRINT_BATCH: usize = 100;
+
 /// Timeout for a single ICMP echo request before the host is considered dead.
 pub const ICMP_TIMEOUT_MS: u64 = 600;
 
