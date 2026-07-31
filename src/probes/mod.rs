@@ -1,4 +1,3 @@
-pub mod http;
 pub mod icmp_8;
 pub mod tcp;
 
